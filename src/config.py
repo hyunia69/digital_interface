@@ -13,3 +13,8 @@ PIR_PIN = 24       # Pin 18 (GP39 / SPI3_CS0)
 # Timing
 DEBOUNCE_MS = 200       # Button debounce in milliseconds
 PIR_COOLDOWN_SEC = 3    # PIR re-trigger suppression in seconds
+
+# Serial / RS232C (BINGO card dongle)
+SERIAL_PORT = "/dev/ttyTHS1"   # UART1: Pin8 TXD, Pin10 RXD
+SERIAL_BAUDRATE = 115200
+SERIAL_TIMEOUT = 5.0           # Read timeout in seconds
