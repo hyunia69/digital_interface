@@ -10,6 +10,10 @@ BUTTON2_PIN = 27   # Zoom Out - Pin 13 (GP36 / SPI3_CLK)
 # PIR sensor pin (HW-MS03, HIGH = motion detected)
 PIR_PIN = 24       # Pin 18 (GP39 / SPI3_CS0)
 
+# Fan output pins (N-ch MOSFET gate, HIGH = fan ON)
+FAN1_PIN = 6       # Pin 31 (GP66 / GPIO011)
+FAN2_PIN = 12      # Pin 32 (GP113_PWM7 / GPIO007)
+
 # Timing
 DEBOUNCE_MS = 200       # Button debounce in milliseconds
 PIR_COOLDOWN_SEC = 3    # PIR re-trigger suppression in seconds

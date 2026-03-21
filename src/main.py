@@ -8,9 +8,11 @@ import Jetson.GPIO as GPIO
 
 from config import (
     BUTTON1_PIN, BUTTON2_PIN, PIR_PIN,
+    FAN1_PIN, FAN2_PIN,
     SERIAL_PORT, SERIAL_BAUDRATE, SERIAL_TIMEOUT,
 )
 from button import ButtonInput
+from fan import FanOutput
 from pir import PirInput
 from serial_comm import SerialComm
 
@@ -22,6 +24,15 @@ def main():
     btn_zoom_in = ButtonInput(BUTTON1_PIN, "ZOOM_IN")
     btn_zoom_out = ButtonInput(BUTTON2_PIN, "ZOOM_OUT")
     pir = PirInput(PIR_PIN)
+
+    # Fan outputs
+    fan1 = FanOutput(FAN1_PIN, "FAN1")
+    fan2 = FanOutput(FAN2_PIN, "FAN2")
+
+    # PIR motion → fans on, buttons → fan toggle
+    pir.on_motion = lambda: (fan1.on(), fan2.on())
+    btn_zoom_in.on_press = fan1.toggle
+    btn_zoom_out.on_press = fan2.toggle
 
     # Serial / BINGO dongle
     serial_comm = SerialComm(SERIAL_PORT, SERIAL_BAUDRATE, SERIAL_TIMEOUT)
@@ -53,6 +64,8 @@ def main():
     for inp in inputs:
         inp.stop()
 
+    fan1.off()
+    fan2.off()
     serial_comm.close()
     GPIO.cleanup()
     print("GPIO cleaned up. Exiting.")
