@@ -1,0 +1,109 @@
+/dts-v1/;
+/plugin/;
+
+/*
+ * Digital Interface Board pinmux overlay for Jetson Orin Nano (Super) p3768+p3767-0005.
+ *
+ * Forces the 40-pin header pads used by the interface board into a clean
+ * GPIO state regardless of bootloader SFIO defaults. The SPI3 SFIO that
+ * boots active on PY.00 / PY.03 (visible as a continuous SCK toggle on
+ * BUTTON2 line, ~1V average on multimeter) is replaced here with rsvd1.
+ *
+ * Camera CSI overlay is independent (different DTB nodes); both can be
+ * loaded together via OVERLAYS in extlinux.conf.
+ *
+ * Pin map (40-pin header → SoC pad → role):
+ *   Pin12  BCM18  PH.07 SOC_GPIO41   BUTTON1 input  (external pull-up to 3.3V)
+ *   Pin13  BCM27  PY.00 SPI3_SCK     BUTTON2 input  (external pull-up to 3.3V)  <- SFIO release
+ *   Pin18  BCM24  PY.03 SPI3_CS0     PIR    input  (HW-MS03 push-pull)          <- SFIO release
+ *   Pin31  BCM6   PQ.06 SOC_GPIO33   FAN1   output (opto-LED gate, 5V via diode)
+ *   Pin32  BCM12  PG.06 SOC_GPIO19   FAN2   output (opto-LED gate, 5V via diode)
+ *
+ * Pinconf semantics (Tegra234 NVIDIA convention):
+ *   nvidia,function    : "rsvd0"/"rsvd1" = GPIO mux, others = SFIO
+ *   nvidia,tristate    : 0 = drive enabled (output capable), 1 = tristate
+ *   nvidia,enable-input: 0 = input buffer off, 1 = input buffer on
+ *
+ * Function selection (verified against
+ * /sys/kernel/debug/pinctrl/2430000.pinmux/pinmux-functions):
+ *     PH.07: rsvd0 contains soc_gpio41_ph7  (default already)
+ *     PY.00: rsvd1 contains spi3_sck_py0    (rsvd0 does not)
+ *     PY.03: rsvd1 contains spi3_cs0_py3
+ *     PQ.06: rsvd0 contains soc_gpio33_pq6
+ *     PG.06: rsvd0 contains soc_gpio19_pg6
+ *
+ * Apply mechanism follows the existing tegra234-...-hdr40.dtbo pattern:
+ *   target = <&pinmux>; (resolved from active DTB __symbols__/pinmux)
+ *   __overlay__ adds pinctrl-names/pinctrl-0 to the pinmux controller so the
+ *   tegra-pinctrl driver writes our settings on probe.
+ */
+
+/ {
+	overlay-name = "Digital Interface Board Pinmux";
+	jetson-header-name = "Jetson 40pin Header";
+	compatible = "nvidia,p3768-0000+p3767-0000",
+		     "nvidia,p3768-0000+p3767-0001",
+		     "nvidia,p3768-0000+p3767-0003",
+		     "nvidia,p3768-0000+p3767-0004",
+		     "nvidia,p3768-0000+p3767-0005",
+		     "nvidia,p3768-0000+p3767-0000-super",
+		     "nvidia,p3768-0000+p3767-0001-super",
+		     "nvidia,p3768-0000+p3767-0003-super",
+		     "nvidia,p3768-0000+p3767-0004-super",
+		     "nvidia,p3768-0000+p3767-0005-super";
+
+	fragment@0 {
+		target = <&pinmux>;
+		__overlay__ {
+			pinctrl-names = "default";
+			pinctrl-0 = <&interface_board_pins>;
+
+			interface_board_pins: interface_board_pins {
+				/* BUTTON1 — Pin 12 / BCM18 / PH.07 / SOC_GPIO41 */
+				button1_ph7 {
+					nvidia,pins = "soc_gpio41_ph7";
+					nvidia,function = "rsvd0";
+					nvidia,pin-label = "interface_button1";
+					nvidia,tristate = <1>;
+					nvidia,enable-input = <1>;
+				};
+
+				/* BUTTON2 — Pin 13 / BCM27 / PY.00 (SPI3_SCK released) */
+				button2_py0 {
+					nvidia,pins = "spi3_sck_py0";
+					nvidia,function = "rsvd1";
+					nvidia,pin-label = "interface_button2";
+					nvidia,tristate = <1>;
+					nvidia,enable-input = <1>;
+				};
+
+				/* PIR — Pin 18 / BCM24 / PY.03 (SPI3_CS0 released) */
+				pir_py3 {
+					nvidia,pins = "spi3_cs0_py3";
+					nvidia,function = "rsvd1";
+					nvidia,pin-label = "interface_pir";
+					nvidia,tristate = <1>;
+					nvidia,enable-input = <1>;
+				};
+
+				/* FAN1 — Pin 31 / BCM6 / PQ.06 / SOC_GPIO33 */
+				fan1_pq6 {
+					nvidia,pins = "soc_gpio33_pq6";
+					nvidia,function = "rsvd0";
+					nvidia,pin-label = "interface_fan1";
+					nvidia,tristate = <0>;
+					nvidia,enable-input = <1>;
+				};
+
+				/* FAN2 — Pin 32 / BCM12 / PG.06 / SOC_GPIO19 */
+				fan2_pg6 {
+					nvidia,pins = "soc_gpio19_pg6";
+					nvidia,function = "rsvd0";
+					nvidia,pin-label = "interface_fan2";
+					nvidia,tristate = <0>;
+					nvidia,enable-input = <1>;
+				};
+			};
+		};
+	};
+};

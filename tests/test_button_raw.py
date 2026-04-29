@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""버튼 감지 테스트 (현재 보드 그대로, 풀업 저항 없는 상태).
+"""버튼 감지 테스트 (인터페이스보드 외부 풀업 사용).
 
-현재 상태:
-  - 보드/Jetson 양쪽 모두 풀업 저항 없음
-  - GPIO 핀이 플로팅 상태일 수 있음 → 노이즈 발생 가능
-  - 버튼 누르면 GND 연결 (Active LOW)
+회로도 (02_interface/20260429_회로도.pdf) 기준:
+  - BUTTON1 (GPIO18, Pin12), BUTTON2 (GPIO27, Pin13)
+  - 둘 다 +3.3V → 외부 풀업 저항 → GPIO 라인 → SMW250-02 커넥터 → 외부버튼 → GND
+  - 평소 HIGH, 버튼 누르면 LOW (Active LOW)
+  - GPIO 라인에 필터 커패시터도 실장되어 있음
 
 테스트 목적:
-  - 버튼을 눌렀을 때 Jetson에서 실제로 신호 변화를 감지할 수 있는지 확인
-  - 풀업 없이도 동작하는지, 노이즈가 얼마나 심한지 관찰
+  - idle 시 HIGH가 안정적으로 유지되는지 (외부 풀업 정상 동작 여부)
+  - 버튼을 눌렀을 때 LOW 에지가 잡히는지
+  - HIGH가 아닌 LOW/불안정이면 풀업 저항 미실장, 배선 단선,
+    또는 핀 SFIO/pinmux 잔류 의심
 
 실행: sudo python3 tests/test_button_raw.py
 """
@@ -18,6 +21,8 @@ import sys
 import time
 from datetime import datetime
 
+import os
+os.environ.setdefault("JETSON_MODEL_NAME", "JETSON_ORIN_NANO")  # Orin Nano "Engineering Reference" model not auto-detected
 import Jetson.GPIO as GPIO
 
 # 현재 config.py 기준 핀 번호
@@ -42,29 +47,14 @@ def main():
     for pin, name in BUTTONS.items():
         GPIO.setup(pin, GPIO.IN)
         initial = GPIO.input(pin)
-        state = "HIGH (정상 대기)" if initial == GPIO.HIGH else "LOW (눌림 또는 플로팅)"
+        state = "HIGH (정상 대기, 외부 풀업 OK)" if initial == GPIO.HIGH else "LOW (눌림 / 풀업 미작동 / 배선 끊김 의심)"
         print(f"  {name}")
         print(f"    초기 상태: {state} (값: {initial})")
     print()
 
-    # 소프트웨어 풀업 시도 (Orin Nano에서 미작동 가능)
-    print("[INFO] 소프트웨어 풀업(PUD_UP) 설정 시도...")
-    try:
-        for pin in BUTTONS:
-            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        print("[INFO] PUD_UP 설정 완료 (실제 작동 여부는 하드웨어 의존)")
-    except Exception as e:
-        print(f"[WARN] PUD_UP 설정 실패: {e}")
-        print("[WARN] Orin Nano에서는 내부 풀업이 미지원일 수 있음")
-
-    for pin, name in BUTTONS.items():
-        after = GPIO.input(pin)
-        print(f"  {name} → PUD_UP 후: {'HIGH' if after else 'LOW'} ({after})")
-    print()
-
     print("-" * 60)
     print("  버튼을 눌러보세요. Ctrl+C로 종료.")
-    print("  (풀업 없으면 노이즈로 인한 오탐 발생 가능)")
+    print("  정상: 누르면 LOW, 떼면 HIGH")
     print("-" * 60)
     print()
 
@@ -103,9 +93,9 @@ def main():
         cnt = event_count[pin]
         print(f"  {name}: 이벤트 {cnt}회")
         if cnt == 0:
-            print(f"    → 신호 감지 안 됨 (배선 또는 풀업 문제 확인)")
+            print(f"    → 신호 감지 안 됨 (헤더 핀 연결 / 풀업 / 배선 / pinmux 점검)")
         elif cnt > 100:
-            print(f"    → 노이즈 과다 (풀업 저항 추가 필요)")
+            print(f"    → 노이즈 과다 (필터 캡 / 외부 풀업 점검)")
     print()
 
     GPIO.cleanup()
