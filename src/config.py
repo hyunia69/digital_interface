@@ -10,9 +10,10 @@ BUTTON2_PIN = 27   # Zoom Out - Pin 13 (GP36 / SPI3_CLK)
 # PIR sensor pin (HW-MS03, HIGH = motion detected)
 PIR_PIN = 24       # Pin 18 (GP39 / SPI3_CS0)
 
-# Fan output pins (N-ch MOSFET gate, HIGH = fan ON)
-FAN1_PIN = 6       # Pin 31 (GP66 / GPIO011)
-FAN2_PIN = 12      # Pin 32 (GP113_PWM7 / GPIO007)
+# Fan output pins (AQY210SZ opto-MOSFET relay, active-LOW: GPIO LOW = fan ON)
+# Variable name follows board silkscreen label (FAN1 = Pin 32, FAN2 = Pin 31).
+FAN1_PIN = 12      # Pin 32 / BCM12 / PG.06 (SOC_GPIO19) — board "FAN1"
+FAN2_PIN = 6       # Pin 31 / BCM6  / PQ.06 (SOC_GPIO33) — board "FAN2"
 
 # Timing
 DEBOUNCE_MS = 200       # Button debounce in milliseconds

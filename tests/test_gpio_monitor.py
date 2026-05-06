@@ -19,6 +19,8 @@ import sys
 import time
 from datetime import datetime
 
+import os
+os.environ.setdefault("JETSON_MODEL_NAME", "JETSON_ORIN_NANO")  # Orin Nano "Engineering Reference" model not auto-detected
 import Jetson.GPIO as GPIO
 
 # Jetson Orin Nano 40핀 헤더 - GPIO 사용 가능 핀 목록

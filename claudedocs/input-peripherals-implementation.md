@@ -409,7 +409,7 @@ class FanOutput:
         GPIO.output(self.pin, GPIO.LOW)
 ```
 
-- `config.py`에 `FAN1_PIN = 6`, `FAN2_PIN = 12` 추가 예정
+- `config.py`에 `FAN1_PIN = 6`, `FAN2_PIN = 12` 추가 예정 *(2026-05-07 정정: 보드 실크 라벨에 맞춰 `FAN1_PIN = 12` / `FAN2_PIN = 6`로 deploy됨. 자세한 사유는 `02_interface/PINMUX_SETUP.md` §13.)*
 - PIR 모션 감지 → 팬 on 등의 연동은 콜백으로 연결
 
 ### 7.3 기타 출력 장치 (추후 구현)

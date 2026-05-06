@@ -12,12 +12,13 @@
  * Camera CSI overlay is independent (different DTB nodes); both can be
  * loaded together via OVERLAYS in extlinux.conf.
  *
- * Pin map (40-pin header → SoC pad → role):
+ * Pin map (40-pin header → SoC pad → role).
+ * Role labels follow the board silkscreen (FAN1=Pin32, FAN2=Pin31):
  *   Pin12  BCM18  PH.07 SOC_GPIO41   BUTTON1 input  (external pull-up to 3.3V)
  *   Pin13  BCM27  PY.00 SPI3_SCK     BUTTON2 input  (external pull-up to 3.3V)  <- SFIO release
  *   Pin18  BCM24  PY.03 SPI3_CS0     PIR    input  (HW-MS03 push-pull)          <- SFIO release
- *   Pin31  BCM6   PQ.06 SOC_GPIO33   FAN1   output (opto-LED gate, 5V via diode)
- *   Pin32  BCM12  PG.06 SOC_GPIO19   FAN2   output (opto-LED gate, 5V via diode)
+ *   Pin31  BCM6   PQ.06 SOC_GPIO33   FAN2   output (opto-LED gate, 5V via diode)
+ *   Pin32  BCM12  PG.06 SOC_GPIO19   FAN1   output (opto-LED gate, 5V via diode)
  *
  * Pinconf semantics (Tegra234 NVIDIA convention):
  *   nvidia,function    : "rsvd0"/"rsvd1" = GPIO mux, others = SFIO
@@ -30,7 +31,7 @@
  *     PY.00: rsvd1 contains spi3_sck_py0    (rsvd0 does not)
  *     PY.03: rsvd1 contains spi3_cs0_py3
  *     PQ.06: rsvd0 contains soc_gpio33_pq6
- *     PG.06: rsvd0 contains soc_gpio19_pg6
+ *     PG.06: "rsvd1" contains soc_gpio19_pg6 (NOT rsvd0 — see fan1_pg6 note)
  *
  * Apply mechanism follows the existing tegra234-...-hdr40.dtbo pattern:
  *   target = <&pinmux>; (resolved from active DTB __symbols__/pinmux)
@@ -59,11 +60,15 @@
 			pinctrl-0 = <&interface_board_pins>;
 
 			interface_board_pins: interface_board_pins {
-				/* BUTTON1 — Pin 12 / BCM18 / PH.07 / SOC_GPIO41 */
+				/* BUTTON1 — Pin 12 / BCM18 / PH.07 / SOC_GPIO41
+				 * nvidia,pull = <2> : pull-up (외부 풀업이 약해 누름 후
+				 * HIGH 복귀 실패 → SoC internal pull-up으로 보강).
+				 */
 				button1_ph7 {
 					nvidia,pins = "soc_gpio41_ph7";
 					nvidia,function = "rsvd0";
 					nvidia,pin-label = "interface_button1";
+					nvidia,pull = <2>;
 					nvidia,tristate = <1>;
 					nvidia,enable-input = <1>;
 				};
@@ -73,6 +78,7 @@
 					nvidia,pins = "spi3_sck_py0";
 					nvidia,function = "rsvd1";
 					nvidia,pin-label = "interface_button2";
+					nvidia,pull = <2>;
 					nvidia,tristate = <1>;
 					nvidia,enable-input = <1>;
 				};
@@ -86,20 +92,35 @@
 					nvidia,enable-input = <1>;
 				};
 
-				/* FAN1 — Pin 31 / BCM6 / PQ.06 / SOC_GPIO33 */
-				fan1_pq6 {
+				/* FAN2 — Pin 31 / BCM6 / PQ.06 / SOC_GPIO33
+				 * (Board silkscreen calls this Pin "FAN2".)
+				 */
+				fan2_pq6 {
 					nvidia,pins = "soc_gpio33_pq6";
 					nvidia,function = "rsvd0";
-					nvidia,pin-label = "interface_fan1";
+					nvidia,pin-label = "interface_fan2";
 					nvidia,tristate = <0>;
 					nvidia,enable-input = <1>;
 				};
 
-				/* FAN2 — Pin 32 / BCM12 / PG.06 / SOC_GPIO19 */
-				fan2_pg6 {
+				/* FAN1 — Pin 32 / BCM12 / PG.06 / SOC_GPIO19
+				 * (Board silkscreen calls this Pin "FAN1".)
+				 *
+				 * function = "rsvd1". PG.06 SFIO map: gp / rsvd1 /
+				 * rsvd2 / rsvd3 (no rsvd0). Earlier "gp" guess was
+				 * wrong — "gp" routes a real GP-PWM SFIO to the pad
+				 * (measured ~1.7V = ~50% duty average; GPIO LOW could
+				 * not pull below idle while GPIO HIGH still reached
+				 * 3.3V — classic SFIO winning over GPIO sink).
+				 * "rsvd1" is the first true reserved (no SFIO) that
+				 * includes this pad, so the pad is released to the
+				 * GPIO controller. Verified via
+				 * /sys/kernel/debug/pinctrl/2430000.pinmux/pinmux-functions.
+				 */
+				fan1_pg6 {
 					nvidia,pins = "soc_gpio19_pg6";
-					nvidia,function = "rsvd0";
-					nvidia,pin-label = "interface_fan2";
+					nvidia,function = "rsvd1";
+					nvidia,pin-label = "interface_fan1";
 					nvidia,tristate = <0>;
 					nvidia,enable-input = <1>;
 				};
