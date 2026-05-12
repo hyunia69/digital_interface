@@ -743,3 +743,92 @@ sudo python3 src/main.py
 | (b) 두 핀 owner 정상 + (c)(d) 모두 회전 | **정합 완료**. 이후 코드/문서/보드 라벨이 한 의미로 정렬됨. |
 | (b) UNCLAIMED 출현 | DTBO/머지 DTB가 적용 안 됨. md5 재확인. 필요 시 13-1 직전 백업으로 롤백: `sudo cp /boot/dtb/kernel_*-nv-super.merged.dtb.bak.before-label-realign.20260507-004226 /boot/dtb/kernel_*-nv-super.merged.dtb` |
 | (e)에서 zoom-in과 보드 FAN1 라벨이 안 맞음 | 라벨 정합이 빠진 곳이 남아 있다는 의미. `grep -rnE "FAN1_PIN|FAN2_PIN|fan1_p|fan2_p|interface_fan1|interface_fan2"` 로 잔존 미정합 위치 확인 |
+
+## 14. LIFT H-BRIDGE 핀 추가 — BCM13/BCM19 (2026-05-07 21:51)
+
+§13 라벨 정합 완료 후, 리프트컬럼 모터 구동을 위해 BCM13(Pin 33, PH.00)과 BCM19(Pin 35, PI.02)를 DTBO에 추가했다. 회로상 두 핀은 74HC244(U2) 버퍼를 거쳐 BTS7960B 두 개로 구성된 H-Bridge의 IN 입력으로 들어간다. INH(enable)는 +3.3V 상시 풀로 고정되어 있어 방향/구동은 IN1/IN2 두 GPIO가 단독 결정한다.
+
+### 14-1. 핀 매핑
+
+| 노드 | BCM | Pin | SoC pad | function | pull | 역할 |
+|---|---|---|---|---|---|---|
+| `lift_in1_ph0` | 13 | 33 | `soc_gpio21_ph0` (PH.00, line 43) | `rsvd0` | 1 (down) | 74HC244 1A0 → BTS7960B (U3) IN |
+| `lift_in2_pi2` | 19 | 35 | `soc_gpio44_pi2` (PI.02, line 53) | `rsvd0` | 1 (down) | 74HC244 1A2 → BTS7960B (U1) IN |
+
+### 14-2. 함수 선택 근거
+
+`/sys/kernel/debug/pinctrl/2430000.pinmux/pinmux-functions` 검색 결과:
+
+| 핀 | 후보 그룹 | 채택 | 이유 |
+|---|---|---|---|
+| PH.00 | `gp` / `rsvd0` / `i2s7` / `rsvd3` | `rsvd0` | `gp`는 GP-PWM(`32c0000.pwm`) SFIO를 패드에 라우팅 — §12 PG.06 사례와 동일 함정. `rsvd0`이 첫 true-reserved이며 PH.00 포함. |
+| PI.02 | `rsvd0` / `i2s2` / `rsvd2` / `rsvd3` | `rsvd0` | i2s2 SFIO 회피. `rsvd0`이 첫 true-reserved이며 PI.02 포함. |
+
+### 14-3. Pull-down 채택 근거
+
+두 핀 모두 출력 GPIO지만 `nvidia,pull = <1>` (pull-down)을 명시했다. 부팅 시 GPIO 컨트롤러가 핀을 잡고 userspace가 값을 쓰기 전 짧은 윈도에서 패드는 hi-Z이고 74HC244 입력은 floating한다. 두 BTS7960B의 INH가 +3.3V 상시 ON이므로 IN이 floating 상태에서 어느 한쪽이라도 우연히 HIGH로 latch되면 모터 OUT이 +12V로 끌려 의도치 않은 회전이 발생할 수 있다. 양쪽 IN을 LOW로 fix해 두면 두 BTS7960 OUT 모두 GND → 모터 양 단자 동전위 → 정지 상태로 안전하게 머문다.
+
+### 14-4. 빌드/머지 산출물 (2026-05-07 21:51, **현재 deployed**)
+
+| 파일 | md5 | 비고 |
+|---|---|---|
+| `02_interface/dtbo/digital-interface-pinmux.dtbo` | `927e784d67288715f4d45d9ed11388dc` | LIFT IN1/IN2 추가 |
+| `/boot/digital-interface-pinmux.dtbo` | 동일 | 부팅 입력 |
+| `/boot/dtb/kernel_*-nv-super.merged.dtb` | `01bb168a780e8943e39dad04503c4753` | 254,785 B, 부팅 FDT 타깃 |
+| `/boot/digital-interface-pinmux.dtbo.bak.before-lift.20260507-215102` | `319e423d49f847fd6f50ed8e2a468a5a` (실제로는 §13 deploy본 = `18666d584be6d9c2eb322b1dce60d57b`) | 14 직전 dtbo |
+| `/boot/dtb/kernel_*-nv-super.merged.dtb.bak.before-lift.20260507-215102` | `6e3cad35f68c56760fbac20c58550d5d` | 14 직전 머지 DTB (§13 결과물) |
+| `02_interface/dtbo/digital-interface-pinmux.dts.bak.before-lift.20260507-215102` | — | 14 직전 dts 백업 |
+
+`extlinux.conf`는 변경 없음.
+
+### 14-5. 재부팅 후 검증 절차 — 다음 세션 진입 시 첫 작업
+
+머지 DTB가 갱신됐으니 재부팅 후 새 세션에서 아래 순서로 검증한다. 시스템 비번: `123456`.
+
+```bash
+# (a) 머지 DTB md5 — 부팅된 게 새 버전인지 확인
+md5sum /boot/dtb/kernel_tegra234-p3768-0000+p3767-0005-nv-super.merged.dtb
+# 기대: 01bb168a780e8943e39dad04503c4753
+
+# (b) pinmux owner — 7개 핀 모두 HOG 등록되는지
+sudo grep -E "pin (41|43|50|53|106|122|125) " \
+  /sys/kernel/debug/pinctrl/2430000.pinmux/pinmux-pins
+# 기대 (신규 두 줄):
+#   pin 43 (SOC_GPIO21_PH0): 2430000.pinmux (...) (HOG) function rsvd0 group soc_gpio21_ph0
+#   pin 53 (SOC_GPIO44_PI2): 2430000.pinmux (...) (HOG) function rsvd0 group soc_gpio44_pi2
+# 기존 5개도 그대로 owner 표시 유지되는지 회귀 확인.
+
+# (c) idle — pull-down으로 둘 다 LOW
+gpioget gpiochip0 43 53
+# 기대: 0 0
+sleep 5; gpioget gpiochip0 43 53
+# 여전히 0 0 (시간 경과해도 floating으로 흔들리지 않는지)
+
+# (d) 라이브 토글 — 한 방향씩 짧게 (2초)
+#     ⚠️ 첫 시도 전 리프트가 충분한 가동 범위에 있는지 육안 확인
+sudo gpioset --mode=time --sec=2 gpiochip0 43=1 53=0
+# 기대: 한 방향 회전, 2초 뒤 line 모두 0/0 복귀로 정지
+sudo gpioset --mode=time --sec=2 gpiochip0 43=0 53=1
+# 기대: 반대 방향 회전 후 정지
+
+# (e) 회귀 — BUTTON/PIR/FAN 기존 동작 유지
+gpioget gpiochip0 50 122 125
+# 기대: 1 1 ?(PIR 상태 의존)
+sudo python3 tests/test_fan1_toggle.py --period 2 --cycles 2
+# 기대: 보드 FAN1(Pin32) 회전 정상
+sudo gpioset --mode=time --sec=2 gpiochip0 106=0
+# 기대: 보드 FAN2(Pin31) 회전 정상
+
+# (f) 카메라 회귀 (연결 시)
+ls /dev/video*
+```
+
+#### 결과 분기
+
+| 결과 | 의미 / 다음 단계 |
+|---|---|
+| (b) pin 43, 53 모두 `function rsvd0` HOG + (c) idle 0 0 안정 + (d) 양방향 회전 + (e) 회귀 OK | **LIFT 핀 추가 완료**. `src/lift.py` 모듈화 등 다음 단계로 진행. |
+| (b) pin 43 또는 53 `MUX UNCLAIMED` | dtc 매칭 실패 가능성. `fdtdump` 로 머지 DTB 안에 두 노드가 있는지 확인 (이미 21:51 시점엔 있었음). md5 일치 확인. |
+| (c) idle 0 0인데 (d) 한쪽 방향만 동작 | 74HC244 1A0/1A2 결선, BTS7960B 한쪽 칩 점검. 두 GPIO가 line 43↔53 BCM13↔BCM19 순서 맞는지 헷갈리면 보드 J5 핀 매핑 (Pin 33=BCM13=line 43, Pin 35=BCM19=line 53) 재확인. |
+| (e) 어느 회귀라도 깨짐 | LIFT 노드 추가가 다른 핀 적용에 영향 — 14 직전 백업으로 롤백:<br>`sudo cp /boot/digital-interface-pinmux.dtbo.bak.before-lift.20260507-215102 /boot/digital-interface-pinmux.dtbo`<br>`sudo cp /boot/dtb/kernel_*-nv-super.merged.dtb.bak.before-lift.20260507-215102 /boot/dtb/kernel_*-nv-super.merged.dtb`<br>재부팅 후 회귀 재확인. |
+| (a) md5 불일치 | 부팅 메뉴가 다른 라벨로 갔거나 머지 DTB가 안 갱신된 상태. `grep "^DEFAULT" /boot/extlinux/extlinux.conf` 로 확인. |

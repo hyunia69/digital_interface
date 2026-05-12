@@ -14,19 +14,16 @@
  *
  * Pin map (40-pin header → SoC pad → role).
  * Role labels follow the board silkscreen (FAN1=Pin32, FAN2=Pin31):
- *   Pin12  BCM18  PH.07 SOC_GPIO41   BUTTON1  input  (external pull-up to 3.3V)
- *   Pin13  BCM27  PY.00 SPI3_SCK     BUTTON2  input  (external pull-up to 3.3V)  <- SFIO release
- *   Pin18  BCM24  PY.03 SPI3_CS0     PIR      input  (HW-MS03 push-pull)         <- SFIO release
- *   Pin31  BCM6   PQ.06 SOC_GPIO33   FAN2     output (opto-LED gate, 5V via diode)
- *   Pin32  BCM12  PG.06 SOC_GPIO19   FAN1     output (opto-LED gate, 5V via diode)
- *   Pin33  BCM13  PH.00 SOC_GPIO21   LIFT_IN1 output (74HC244 1A0 → BTS7960B U3 IN; lift H-bridge)
- *   Pin35  BCM19  PI.02 SOC_GPIO44   LIFT_IN2 output (74HC244 1A2 → BTS7960B U1 IN; lift H-bridge)
+ *   Pin12  BCM18  PH.07 SOC_GPIO41   BUTTON1 input  (external pull-up to 3.3V)
+ *   Pin13  BCM27  PY.00 SPI3_SCK     BUTTON2 input  (external pull-up to 3.3V)  <- SFIO release
+ *   Pin18  BCM24  PY.03 SPI3_CS0     PIR    input  (HW-MS03 push-pull)          <- SFIO release
+ *   Pin31  BCM6   PQ.06 SOC_GPIO33   FAN2   output (opto-LED gate, 5V via diode)
+ *   Pin32  BCM12  PG.06 SOC_GPIO19   FAN1   output (opto-LED gate, 5V via diode)
  *
  * Pinconf semantics (Tegra234 NVIDIA convention):
  *   nvidia,function    : "rsvd0"/"rsvd1" = GPIO mux, others = SFIO
  *   nvidia,tristate    : 0 = drive enabled (output capable), 1 = tristate
  *   nvidia,enable-input: 0 = input buffer off, 1 = input buffer on
- *   nvidia,pull        : 0 = none, 1 = pull-down, 2 = pull-up
  *
  * Function selection (verified against
  * /sys/kernel/debug/pinctrl/2430000.pinmux/pinmux-functions):
@@ -35,8 +32,6 @@
  *     PY.03: rsvd1 contains spi3_cs0_py3
  *     PQ.06: rsvd0 contains soc_gpio33_pq6
  *     PG.06: "rsvd1" contains soc_gpio19_pg6 (NOT rsvd0 — see fan1_pg6 note)
- *     PH.00: rsvd0 contains soc_gpio21_ph0   ("gp" routes GP-PWM SFIO; avoid)
- *     PI.02: rsvd0 contains soc_gpio44_pi2   (also in i2s2 SFIO; rsvd0 first true-reserved)
  *
  * Apply mechanism follows the existing tegra234-...-hdr40.dtbo pattern:
  *   target = <&pinmux>; (resolved from active DTB __symbols__/pinmux)
@@ -126,42 +121,6 @@
 					nvidia,pins = "soc_gpio19_pg6";
 					nvidia,function = "rsvd1";
 					nvidia,pin-label = "interface_fan1";
-					nvidia,tristate = <0>;
-					nvidia,enable-input = <1>;
-				};
-
-				/* LIFT_IN1 — Pin 33 / BCM13 / PH.00 / SOC_GPIO21
-				 * Drives 74HC244 1A0 → BTS7960B (U3) IN of the
-				 * lift-column H-bridge. function = "rsvd0" releases
-				 * the pad from any SFIO; "gp" would route GP-PWM
-				 * (32c0000.pwm) like PG.06 did, so avoid.
-				 *
-				 * pull = <1> (pull-down): both H-bridge half-bridges
-				 * share INH=+3.3V (always enabled), so the IN lines
-				 * alone decide motor terminals. A floating 74HC244
-				 * input during the boot window before userspace
-				 * takes the GPIO is dangerous (random direction).
-				 * Pull-down forces both IN1/IN2 LOW at boot → both
-				 * BTS7960 OUT to GND → motor stationary.
-				 */
-				lift_in1_ph0 {
-					nvidia,pins = "soc_gpio21_ph0";
-					nvidia,function = "rsvd0";
-					nvidia,pin-label = "interface_lift_in1";
-					nvidia,pull = <1>;
-					nvidia,tristate = <0>;
-					nvidia,enable-input = <1>;
-				};
-
-				/* LIFT_IN2 — Pin 35 / BCM19 / PI.02 / SOC_GPIO44
-				 * Drives 74HC244 1A2 → BTS7960B (U1) IN.
-				 * Same boot-safe pull-down rationale as lift_in1.
-				 */
-				lift_in2_pi2 {
-					nvidia,pins = "soc_gpio44_pi2";
-					nvidia,function = "rsvd0";
-					nvidia,pin-label = "interface_lift_in2";
-					nvidia,pull = <1>;
 					nvidia,tristate = <0>;
 					nvidia,enable-input = <1>;
 				};
